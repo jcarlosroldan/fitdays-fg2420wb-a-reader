@@ -1,8 +1,8 @@
 # Fitdays FG2420WB-A reader
 
-![Two people's body composition with wireframe figures and two months of weight history](screenshot.jpg)
+This reads a FitDays FG2420WB-A bioimpedance scale over Bluetooth, without the vendor app or its cloud, and shows each person's body composition on a page with a wireframe figure, twenty measures, their history and the last 28 days trend change.
 
-This reads a FitDays FG2420WB-A bioimpedance scale over Bluetooth, without the vendor app or its cloud, and shows each person's body composition on a page with a wireframe figure, twenty measures and their history.
+![Two people's body composition with wireframe figures and two months of weight history](screenshot.jpg)
 
 The scale advertises as `MY_SCALE`. After its greeting it expects an acknowledgement and two user profiles, then sends each weighing with ten impedances: trunk, arms and legs at two frequencies. `listener.py` keeps a BlueZ connection open for that exchange, writing one packet at a time because BlueZ refuses a write while another is pending. It appends every weighing to `readings.jsonl` under the closest person, with a confidence from how far the weight and impedances moved since that person's last weighing, allowing more change the longer it has been. `index.php` hands the raw files to the page, which recomputes everything in the browser with a port of the app's own formulas that matches its native library to the last bit.
 

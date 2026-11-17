@@ -1,0 +1,4 @@
+[
+	{"name": "Alice", "sex": "female", "birthdate": "1990-01-01", "height": 168},
+	{"name": "Bob", "sex": "male", "birthdate": "1990-01-01", "height": 180}
+]

@@ -1,6 +1,6 @@
 # Fitdays FG2420WB-A reader
 
-This reads a FitDays FG2420WB-A bioimpedance scale over Bluetooth, without the vendor app or its cloud, and shows each person's body composition on a page with a wireframe figure, twenty measures, their history and the last 28 days trend change.
+This reads a FitDays FG2420WB-A bioimpedance scale over Bluetooth, without the vendor app or its cloud, and shows each person's body composition on a page with a wireframe figure, twenty measures, their history and the last 28 days trend change. Mine is branded masmssm
 
 ![Two people's body composition with wireframe figures and two months of weight history](screenshot.jpg)
 

@@ -9,7 +9,6 @@ from dbus.mainloop.glib import DBusGMainLoop
 from gi.repository.GLib import MainLoop
 from setproctitle import setproctitle
 
-SCALE = 'MY_SCALE'
 UUID = '0000ffb%d-0000-1000-8000-00805f9b34fb'
 DEVICE = 'org.bluez.Device1'
 CHARACTERISTIC = 'org.bluez.GattCharacteristic1'
@@ -28,12 +27,10 @@ def main():
 	adapter = bluez('/org/bluez/hci0', 'org.bluez.Adapter1')
 	adapter.SetDiscoveryFilter({'Transport': 'le', 'DuplicateData': True, 'UUIDs': [UUID % 0]})
 	adapter.StartDiscovery()
-	log('listening for', SCALE)
 	MainLoop().run()
 
 def connect_if_scale(path):
-	if not session and bluez(path, PROPERTIES).GetAll(DEVICE).get('Name') == SCALE:
-		log('scale awake, connecting')
+	if not session and bluez(path, PROPERTIES).GetAll(DEVICE).get('Name') == 'MY_SCALE':
 		session.update(device=path, characteristics={}, partial={}, index=0, outbox=[])
 		bluez(path, DEVICE).Connect(reply_handler=subscribe, error_handler=disconnect)
 
@@ -42,7 +39,6 @@ def dispatch_change(name, values, invalidated, path):
 		if values.get('ServicesResolved'):
 			subscribe()
 		if values.get('Connected') == False:
-			log('disconnected')
 			session.clear()
 	elif name == DEVICE and ('RSSI' in values or 'ManufacturerData' in values):
 		connect_if_scale(path)
@@ -57,11 +53,10 @@ def subscribe():
 	if {UUID % 1, UUID % 2, UUID % 3} - session['characteristics'].keys():
 		disconnect('not the scale')
 		return
-	log('connected, subscribing')
 	characteristic(3).StartNotify(reply_handler=lambda: characteristic(2).StartNotify(reply_handler=lambda: None, error_handler=disconnect), error_handler=disconnect)
 
 def disconnect(reason):
-	log('session failed:', reason)
+	print(datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'session failed:', reason, flush=True)
 	if session:
 		bluez(session['device'], DEVICE).Disconnect(reply_handler=lambda: None, error_handler=lambda error: None)
 		session.clear()
@@ -74,7 +69,6 @@ def read_frame(path, frame):
 		return
 	if packet[0] == 0xa2:
 		return
-	log('received', packet[:12].hex())
 	if packet[0] in (0xa1, 0xaa):
 		send(bytes([0xb0, index, 0]))
 		offset = int(datetime.now().astimezone().utcoffset().total_seconds() // 60)
@@ -106,7 +100,6 @@ def store_weighing(measured, weight, impedances):
 	reading['person'] = {'name': name, 'confidence': round(1 / (1 + deviations[name] ** 2), 2)}
 	with open('readings.jsonl', 'a') as file:
 		file.write(dumps(reading) + '\n')
-	log('weighing', weight, 'kg for', name, 'with confidence', reading['person']['confidence'])
 
 def deviation(previous, reading):
 	drift = sqrt(max(0, datetime.fromisoformat(reading['time']).timestamp() - datetime.fromisoformat(previous['time']).timestamp()) / 604800)
@@ -120,9 +113,6 @@ def bluez(path, name):
 
 def characteristic(number):
 	return bluez(session['characteristics'][UUID % number], CHARACTERISTIC)
-
-def log(*parts):
-	print(datetime.now().strftime('%Y-%m-%d %H:%M:%S'), *parts, flush=True)
 
 if __name__ == '__main__':
 	main()

@@ -69,7 +69,7 @@ const SEGMENTS = ['trunk', 'leftArm', 'rightArm', 'leftLeg', 'rightLeg'];
 function render() {
 	const people = PEOPLE.map((person, index) => {
 		const weighings = READINGS.filter(reading => reading.person.name === person.name && reading.person.confidence >= 0.5);
-		const compositions = weighings.map(({ time, weight, impedances }) => impedances.every(Boolean) ? compose(weight, person.height, Math.floor((Date.parse(time) - Date.parse(person.birthdate)) / 31556952000), person.sex, impedances) : null);
+		const compositions = weighings.map(({ time, weight, impedances }) => compose(weight, person.height, Math.floor((Date.parse(time) - Date.parse(person.birthdate)) / 31556952000), person.sex, impedances));
 		return {
 			...person,
 			color: ['#5be381', '#ff73cf'][index],

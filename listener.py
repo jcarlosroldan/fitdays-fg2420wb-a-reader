@@ -10,6 +10,7 @@ from gi.repository.GLib import MainLoop
 from setproctitle import setproctitle
 
 UUID = '0000ffb%d-0000-1000-8000-00805f9b34fb'
+ADAPTER = 'org.bluez.Adapter1'
 DEVICE = 'org.bluez.Device1'
 CHARACTERISTIC = 'org.bluez.GattCharacteristic1'
 PROPERTIES = 'org.freedesktop.DBus.Properties'
@@ -24,14 +25,13 @@ def main():
 	setproctitle('bt_scale_listen')
 	bus.add_signal_receiver(lambda path, interfaces: DEVICE in interfaces and connect_if_scale(path), dbus_interface=MANAGER, signal_name='InterfacesAdded')
 	bus.add_signal_receiver(dispatch_change, dbus_interface=PROPERTIES, signal_name='PropertiesChanged', path_keyword='path')
-	adapter = bluez('/org/bluez/hci0', 'org.bluez.Adapter1')
-	adapter.SetDiscoveryFilter({'Transport': 'le', 'DuplicateData': True, 'UUIDs': [UUID % 0]})
-	adapter.StartDiscovery()
+	scan()
 	MainLoop().run()
 
 def connect_if_scale(path):
 	if not session and bluez(path, PROPERTIES).GetAll(DEVICE).get('Name') == 'MY_SCALE':
 		session.update(device=path, characteristics={}, partial={}, index=0, outbox=[])
+		bluez('/org/bluez/hci0', ADAPTER).StopDiscovery()
 		bluez(path, DEVICE).Connect(reply_handler=subscribe, error_handler=disconnect)
 
 def dispatch_change(name, values, invalidated, path):
@@ -39,11 +39,16 @@ def dispatch_change(name, values, invalidated, path):
 		if values.get('ServicesResolved'):
 			subscribe()
 		if values.get('Connected') == False:
-			session.clear()
+			end_session()
 	elif name == DEVICE and ('RSSI' in values or 'ManufacturerData' in values):
 		connect_if_scale(path)
 	elif name == CHARACTERISTIC and 'Value' in values and session.get('characteristics'):
 		read_frame(path, bytes(values['Value']))
+
+def scan():
+	adapter = bluez('/org/bluez/hci0', ADAPTER)
+	adapter.SetDiscoveryFilter({'Transport': 'le', 'DuplicateData': True, 'UUIDs': [UUID % 0]})
+	adapter.StartDiscovery()
 
 def subscribe():
 	if not session or session['characteristics'] or not bluez(session['device'], PROPERTIES).Get(DEVICE, 'ServicesResolved'):
@@ -59,7 +64,12 @@ def disconnect(reason):
 	print(datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'session failed:', reason, flush=True)
 	if session:
 		bluez(session['device'], DEVICE).Disconnect(reply_handler=lambda: None, error_handler=lambda error: None)
+		end_session()
+
+def end_session():
+	if session:
 		session.clear()
+		scan()
 
 def read_frame(path, frame):
 	index, length = frame[0], int.from_bytes(frame[1:3], 'big')
@@ -93,6 +103,8 @@ def write_after_reply():
 		write_next()
 
 def store_weighing(measured, weight, impedances):
+	if not all(impedances):
+		return
 	reading = {'time': datetime.fromtimestamp(measured, timezone.utc).isoformat(), 'weight': weight, 'impedances': impedances}
 	latest = {previous['person']['name']: previous for previous in map(loads, open('readings.jsonl'))} if exists('readings.jsonl') else {}
 	deviations = {person['name']: deviation(latest[person['name']], reading) if person['name'] in latest else inf for person in loads(open('people.json').read())}
@@ -103,10 +115,7 @@ def store_weighing(measured, weight, impedances):
 
 def deviation(previous, reading):
 	drift = sqrt(max(0, datetime.fromisoformat(reading['time']).timestamp() - datetime.fromisoformat(previous['time']).timestamp()) / 604800)
-	deviations = [abs(reading['weight'] - previous['weight']) / (2.5 + 1.2 * drift)]
-	if all(reading['impedances']) and all(previous['impedances']):
-		deviations.append(sum(abs(now - before) / before for now, before in zip(reading['impedances'], previous['impedances'])) / len(reading['impedances']) / (0.12 + 0.03 * drift))
-	return max(deviations)
+	return max(abs(reading['weight'] - previous['weight']) / (2.5 + 1.2 * drift), sum(abs(now - before) / before for now, before in zip(reading['impedances'], previous['impedances'])) / len(reading['impedances']) / (0.12 + 0.03 * drift))
 
 def bluez(path, name):
 	return Interface(bus.get_object('org.bluez', path), name)
